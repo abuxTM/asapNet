@@ -7,6 +7,7 @@ state: union(enum) {
     connected: struct {
         id: u32,
         username: []const u8,
+        pos: [2]f32,
     },
 },
 

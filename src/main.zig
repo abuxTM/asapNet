@@ -19,12 +19,6 @@ pub fn main() !void {
     if (c.enet_initialize() != 0) return error.ENetFailedToInit;
     defer c.enet_deinitialize();
 
-    // Init Server
-    // ================================
-    var server: Server = try .init(&.{}, alloc);
-    defer server.deinit();
-    try server.start();
-
     // Init Client
     // ================================
     var client: Client = try .init(alloc);

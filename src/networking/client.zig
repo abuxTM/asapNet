@@ -128,36 +128,28 @@ fn onReceive(self: *Self, event: *c.ENetEvent) !void {
     const packet_len = event.packet.*.dataLength;
     defer c.enet_packet_destroy(event.packet);
 
-    // Check If Packet Is Valid
-    // ================================
-    if (packet_len < 1) {
-        std.debug.print("[CLIENT] Invalid Packet Length: {}\n", .{packet_len});
-        return error.InvalidPacket;
-    }
-
-    // Extract Packet Type
-    // ================================
-    const packet_type = std.meta.intToEnum(Packet.PacketType, packet_data[0]) catch |err| {
-        std.debug.print("[CLIENT] Unknown Packet Type: 0x{X}\n", .{packet_data[0]});
-        return err;
-    };
-
     // Log Received Packet Type
     // ================================
-    std.debug.print("[CLIENT] Received {s} Packet From Server\n", .{@tagName(packet_type)});
+    std.debug.print("[CLIENT] Received {s} Packet From Server\n", .{packet_data[0..]});
+
+    const packet_type_data = try Packet.deserialize(Packet.PacketData, packet_data[0..packet_len], self.alloc);
 
     // Handle Packet
     // ================================
-    switch (packet_type) {
+    switch (packet_type_data) {
         .AUTH_REQUEST => {
             try Packet.send(
-                .AUTH_RESPONSE,
+                .{
+                    .AUTH_RESPONSE = .{
+                        .username = "Yes",
+                    },
+                },
                 &.{ .peer = event.peer },
                 self.alloc,
             );
         },
         else => {
-            std.debug.print("[CLIENT] Unhandled Packet Type: {s}\n", .{@tagName(packet_type)});
+            std.debug.print("[CLIENT] Unhandled Packet Type: {s}\n", .{@tagName(packet_type_data)});
         },
     }
 }

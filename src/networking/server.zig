@@ -20,7 +20,14 @@ host: *c.ENetHost,
 run_thread: ?std.Thread = null,
 mutex: std.Thread.Mutex = .{},
 is_running: bool = true,
+players: std.ArrayList(Player),
 alloc: std.mem.Allocator,
+
+state: enum {
+    Running,
+    Stopping,
+    None,
+},
 
 /// Initialize Server Component
 /// ================================
@@ -43,6 +50,8 @@ pub fn init(config: *const Config, alloc: std.mem.Allocator) !Self {
 
     return .{
         .host = host.?,
+        .players = .init(alloc),
+        .state = .None,
         .alloc = alloc,
     };
 }
@@ -52,11 +61,14 @@ pub fn init(config: *const Config, alloc: std.mem.Allocator) !Self {
 pub fn deinit(self: *Self) void {
     self.stop();
     c.enet_host_destroy(self.host);
+    self.players.deinit();
+    self.state = .None;
 }
 
 /// Listen For Client On New Thread
 /// ================================
 pub fn start(self: *Self) !void {
+    self.state = .Running;
     self.run_thread = try std.Thread.spawn(.{}, eventService, .{self});
 }
 
@@ -64,6 +76,7 @@ pub fn start(self: *Self) !void {
 /// ================================
 fn stop(self: *Self) void {
     if (self.run_thread) |t| {
+        self.state = .Stopping;
         self.mutex.lock();
         self.is_running = false;
         self.mutex.unlock();
@@ -110,13 +123,13 @@ fn onConnect(self: *Self, event: *c.ENetEvent) !void {
         },
     );
 
-    // FIX: Memory Leak
     const player = try self.alloc.create(Player);
+    defer self.alloc.destroy(player);
+
     player.* = .{
         .state = .{ .pending = .{} },
         .peer = event.peer,
     };
-    self.alloc.destroy(player);
 
     event.peer.*.data = player;
 
@@ -144,9 +157,62 @@ fn onDisconnect(self: *Self, event: *c.ENetEvent) !void {
 /// Handle Client's Packet's
 /// ================================
 fn onReceive(self: *Self, event: *c.ENetEvent) !void {
-    _ = self;
-    const data = event.packet.*.data;
+    // Local Fields
+    // ================================
+    const packet_data = event.packet.*.data;
+    const packet_len = event.packet.*.dataLength;
     defer c.enet_packet_destroy(event.packet);
 
-    std.debug.print("[SERVER] Received New Packet From Client [{s}]\n", .{data});
+    // Log Received Packet Type
+    // ================================
+    std.debug.print(
+        "[SERVER] Received {s} Packet From Client\n",
+        .{packet_data[0..]},
+    );
+
+    const packet_type_data = try Packet.deserialize(
+        Packet.PacketData,
+        packet_data[0..packet_len],
+        self.alloc,
+    );
+
+    switch (packet_type_data) {
+        .AUTH_RESPONSE => {
+            // Create New Player Data Info
+            // ================================
+            const player = try self.alloc.create(Player);
+            defer self.alloc.destroy(player);
+
+            // Asign New Data
+            // ================================
+            player.* = .{
+                .state = .{
+                    .connected = .{
+                        .id = 0,
+                        .username = packet_type_data.AUTH_RESPONSE.username,
+                        .pos = .{ 0, 0 },
+                    },
+                },
+                .peer = event.peer,
+            };
+            event.peer.*.data = player;
+
+            // Send Join Packet
+            // ================================
+            try Packet.send(
+                .{
+                    .PLAYER_JOIN = .{
+                        .id = player.state.connected.id,
+                        .username = player.state.connected.username,
+                        .pos = player.state.connected.pos,
+                    },
+                },
+                &.{ .host = self.host, .broadcast = true },
+                self.alloc,
+            );
+        },
+        else => {
+            std.debug.print("[CLIENT] Unhandled Packet Type: {s}\n", .{@tagName(packet_type_data)});
+        },
+    }
 }
