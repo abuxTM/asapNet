@@ -3,6 +3,7 @@ const c = @cImport({
     @cInclude("enet/enet.h");
 });
 
+const Net = @import("testing/net.zig");
 const Server = @import("networking/server.zig");
 const Client = @import("networking/client.zig");
 const Game = @import("core/game.zig");
@@ -29,4 +30,11 @@ pub fn main() !void {
     // ================================
     var game: Game = try .init(alloc);
     defer game.deinit();
+}
+
+test "Yes" {
+    const net = Net.Network(.{}).init(std.heap.page_allocator);
+
+    const server = net.Server();
+    server.start();
 }

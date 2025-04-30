@@ -82,6 +82,7 @@ fn draw(self: *Self) !void {
     _ = c.SDL_RenderClear(self.renderer);
     defer _ = c.SDL_RenderPresent(self.renderer);
 
+    // FIX: This Will Hang The Program On Exit
     var buf: [100]u8 = undefined;
     const fmt = try std.fmt.bufPrintZ(&buf, "Server: {s}", .{@tagName(self.server.state)[0..]});
     _ = c.SDL_SetRenderDrawColor(self.renderer, 200, 200, 200, 255);

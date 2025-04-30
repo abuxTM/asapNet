@@ -143,7 +143,10 @@ pub fn send(
     const packet: *c.ENetPacket = c.enet_packet_create(
         string.items.ptr,
         string.items.len,
-        if (config.reliable) c.ENET_PACKET_FLAG_RELIABLE else c.ENET_PACKET_FLAG_UNSEQUENCED,
+        if (config.reliable)
+            c.ENET_PACKET_FLAG_RELIABLE
+        else
+            c.ENET_PACKET_FLAG_UNSEQUENCED,
     );
 
     // Send Or Broadcast
